@@ -1,4 +1,5 @@
-#pragma once
+#define PID_HPP
+#ifndef PID_HPP
 #include "main.h"
 template<typename T>
 class PID
@@ -26,3 +27,4 @@ private:
   void Compute(void*);
 
 };
+#endif

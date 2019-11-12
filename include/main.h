@@ -51,8 +51,6 @@
  * namespace.
  */
  using namespace pros;
-#include "Systems/Drive.hpp"
-#include "Setup/Globals.hpp"
 // using namespace pros::literals;
 // using namespace okapi;
 

@@ -1,4 +1,4 @@
-#include "main.h"
+#include "Globals.hpp"
 
 pros::Motor FL(1);
 pros::Motor FR(2);

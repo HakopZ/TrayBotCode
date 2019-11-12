@@ -1,7 +1,8 @@
+
+#include "main.h"
 #define GLOBALS_HPP
 #ifndef GLOBALS_HPP
 
-#include "main.h"
 extern pros::Motor FL;
 extern pros::Motor FR;
 extern pros::Motor BL;
