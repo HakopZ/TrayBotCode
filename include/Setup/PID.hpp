@@ -1,11 +1,9 @@
-#define PID_HPP
-#ifndef PID_HPP
+#pragma once
 #include "main.h"
-template<typename T>
 class PID
 {
 public:
-  PID(float kP, float kI, float kD, int Timeout, T Sensor, float IntegralThreshold);
+  PID(float kP, float kI, float kD, float IntegralThreshold);
   ~PID();
   void SetScalors(float, float, float);
   void SetTarget(int, int);
@@ -15,16 +13,14 @@ public:
   float Integral;
   float Target;
   float Output;
-  T Sensor;
-private:
   int Timeout;
+  int Compute(int);
+private:
   float IntegralThreshold;
-  const float kP;
-  const float kI;
-  const float kD;
+  float kP;
+  float kI;
+  float kD;
   float PrevError;
 
-  void Compute(void*);
 
 };
-#endif

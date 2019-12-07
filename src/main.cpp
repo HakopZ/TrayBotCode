@@ -1,11 +1,15 @@
 #include "main.h"
-
+#include "Globals.hpp"
+#include "Systems/Drive.hpp"
+#include "Systems/TwoBar.hpp"
+#include "Systems/Tray.hpp"
 /**
  * A callback function for LLEMU's center button.
  *
  * When this callback is fired, it will toggle line 2 of the LCD text between
  * "I was pressed!" and nothing.
  */
+ pros::Motor FRss(20);
 void on_center_button() {
 	static bool pressed = false;
 	pressed = !pressed;
@@ -58,7 +62,10 @@ void competition_initialize() {}
  * will be stopped. Re-enabling the robot will restart the task, not re-start it
  * from where it left off.
  */
-void autonomous() {}
+void autonomous() {
+
+  
+}
 
 /**
  * Runs the operator control code. This function will be started in its own task
@@ -73,9 +80,137 @@ void autonomous() {}
  * operator control task will be stopped. Re-enabling the robot will restart the
  * task, not resume it from where it left off.
  */
-void opcontrol() {
+ Controller x(E_CONTROLLER_MASTER);
 
+ enum ArmStates
+ {
+   Down,
+   Low,
+   LowD,
+   Mid,
+   MidD
+ };
+ ArmStates CurrentArmState;
+ void ArmPreset()
+ {
+  switch(CurrentArmState)
+  {
+    case Down:
+      SetHeight(0, 0);
+      if(x.get_digital(DIGITAL_Y))
+      {
+        CurrentArmState = Low;
+      }
+      if(x.get_digital(DIGITAL_B))
+      {
+        CurrentArmState = LowD;
+      }
+      break;
+    case Low:
+      SetHeight(0, 0);
+      if(x.get_digital(DIGITAL_Y))
+      {
+        CurrentArmState = Mid;
+      }
+      if(x.get_digital(DIGITAL_B))
+      {
+        CurrentArmState = LowD;
+      }
+      break;
+    case LowD:
+      SetHeight(0, 0);
+      if(x.get_digital(DIGITAL_Y))
+      {
+        CurrentArmState = Mid;
+      }
+      if(x.get_digital(DIGITAL_B))
+      {
+        CurrentArmState = Down;
+      }
+      break;
+    case Mid:
+      SetHeight(0, 0);
+      if(x.get_digital(DIGITAL_Y))
+      {
+        CurrentArmState = Low;
+      }
+      if(x.get_digital(DIGITAL_B))
+      {
+        CurrentArmState = MidD;
+      }
+      break;
+    case MidD:
+      SetHeight(0, 0);
+      if(x.get_digital(DIGITAL_Y))
+      {
+        CurrentArmState = Low;
+      }
+      if(x.get_digital(DIGITAL_B))
+      {
+        CurrentArmState = Down;
+      }
+      break;
+  }
+ }
+ void opcontrol() {
+  ResetDrive();
+  DriveTask.suspend();
+  LiftTask.suspend();
+  TurnTask.suspend();
+  delay(250);
 	while (true) {
+    SetDrivePower(x.get_analog(ANALOG_LEFT_Y), x.get_analog(ANALOG_RIGHT_Y));
+    if(x.get_digital(DIGITAL_Y))
+    {
+      SetLift(127);
+    }
+    else if(x.get_digital(DIGITAL_B))
+    {
+      SetLift(-127);
+    }
+    else
+    {
+      SetLift(0);
+    }
+
+    if(x.get_digital(DIGITAL_L1))
+    {
+      if(TrayPot.get_value() < 2500)
+      {
+        SetTray(127);
+      }
+      else if(TrayPot.get_value() > 2500)
+      {
+        SetTray(50);
+      }
+    }
+    else if(x.get_digital(DIGITAL_L2))
+    {
+      SetTray(-127);
+    }
+    else
+    {
+      SetTray(0);
+    }
+    if(x.get_digital(DIGITAL_R1))
+    {
+      LeftIntake.move(127);
+      RightIntake.move(127);
+    }
+    else if(x.get_digital(DIGITAL_R2))
+    {
+      LeftIntake.move(-127);
+      RightIntake.move(-127);
+    }
+    else
+    {
+      LeftIntake.move(0);
+      RightIntake.move(0);
+
+    }
+    /*
+
+    */
 		pros::delay(20);
 	}
 }
