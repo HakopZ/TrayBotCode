@@ -1,10 +1,25 @@
 #include "Drive.hpp"
-PID LeftDrive(0.5, 0, 0, 200);
-PID RightDrive(0.5, 0, 0, 200);
-PID LeftTurn(0.52, 0, 0, 150);
-PID RightTurn(0.52, 0, 0, 150);
+#define BaseWidth 10.96875
+#define WheelCircumference 3.65 * M_PI
+#define Tick_Per_Rev 300 * (7/3)
+#define Tick_per_inch (Tick_Per_Rev / (WheelCircumference))
+int DriveClampMax = 0;
+int DriveClampMin = 0;
+int TurnClampMax = 0;
+int TurnClampMin = 0;
+float StraightScale = 0;
+#define inch_per_deg ((BaseWidth * M_PI) / 180)
+float TurnTheta = 0;
+long Time = 0;
+float Heading = 0;
+void SetStraight(float Sc)
+{
+  StraightScale = Sc;
+}
 void ResetDrive()
 {
+  BL.set_zero_position(0);
+  BR.set_zero_position(0);
   FL.set_zero_position(0);
   FR.set_zero_position(0);
 }
@@ -15,29 +30,54 @@ void SetDrivePower(int left, int right)
   FL.move(left);
   BL.move(left);
 }
-void SetDrive(int Distance, int TimeOut)
+
+void SetDrive(float Distance, float Angle, int ClampMax, int ClampMin, float Sc)
 {
+  StraightScale = Sc;
+  DriveClampMax = ClampMax;
+  DriveClampMin = ClampMin;
   Time = 0;
-  ResetDrive();
   TurnTask.suspend();
+  Heading = Angle;
+  LeftDrive.SetTarget(BL.get_position() + (Distance*Tick_per_inch));
+  RightDrive.SetTarget(BR.get_position() + (Distance * Tick_per_inch));
   DriveTask.resume();
-  LeftDrive.SetTarget(Distance, TimeOut);
-  RightDrive.SetTarget(Distance, TimeOut);
 }
-void SetTurn(int Value, int TimeOut)
+void SetTurn(float Value,int ClampMax, int ClampMin)
 {
+  TurnClampMin = ClampMin;
+  TurnClampMax = ClampMax;
   Time = 0;
-  ResetDrive();
   DriveTask.suspend();
+  Heading = Value;
+  LeftTurn.SetTarget(Heading);
+  RightTurn.SetTarget(Heading);
   TurnTask.resume();
-  LeftTurn.SetTarget(Value, TimeOut);
-  RightTurn.SetTarget(-Value, TimeOut);
 }
-void DriveFunc(void *)
+int Clamp(int Given, int Max, int Min)
+{
+  if(Given > Max)
+  {
+    return Max;
+  }
+  return Given < Min ? Min : Given;
+}
+void DriveFunc(void*)
 {
   while(true)
   {
-    SetDrivePower(LeftDrive.Compute(FL.get_position()), RightDrive.Compute(FR.get_position()));
+
+    SetDrivePower(Clamp(LeftDrive.Compute(BL.get_position()), DriveClampMax, DriveClampMin) + ((Heading - TurnTheta) * StraightScale) ,  Clamp(RightDrive.Compute(FR.get_position()), DriveClampMax, DriveClampMin) - ((Heading - TurnTheta) * StraightScale));// + ((Heading - TurnTheta)*10), RightDrive.Compute(FR.get_position())-((Heading - TurnTheta)*10));
+  //  pros::lcd::print(5, "LVal: %f", TurnTheta) ;
+    delay(20);
+  }
+}
+void Track(void*)
+{
+  while(true)
+  {
+    TurnTheta = ((BL.get_position() / Tick_per_inch) - (BR.get_position()/ Tick_per_inch)) / inch_per_deg;
+    pros::lcd::print(6, "TurnTheta: %f", TurnTheta);
     delay(20);
   }
 }
@@ -45,10 +85,11 @@ void TurnFunc(void*)
 {
   while(true)
   {
-    SetDrivePower(LeftTurn.Compute(FL.get_position()), RightTurn.Compute(FR.get_position()));
+    SetDrivePower(Clamp(LeftTurn.Compute(TurnTheta), TurnClampMax, TurnClampMin), Clamp(-RightTurn.Compute(TurnTheta), TurnClampMax, TurnClampMin));
     delay(20);
   }
 }
+pros::Task TrackTask = pros::Task(Track, nullptr, "Tracking theta");
 void Brake()
 {
   FL.set_brake_mode(MOTOR_BRAKE_HOLD);
@@ -56,40 +97,61 @@ void Brake()
   BL.set_brake_mode(MOTOR_BRAKE_HOLD);
   BR.set_brake_mode(MOTOR_BRAKE_HOLD);
 }
-
-void OnlyLimit()
+void Coast()
 {
-  int temp = 0;
-  while(temp < 3000 && (LeftLimit.get_value() == 0 || RightLimit.get_value() == 0))
-  {
-    delay(1);
-  }
-  DriveTask.suspend();
-  Brake();
-  SetDrivePower(0,0);
-
+  FL.set_brake_mode(MOTOR_BRAKE_COAST);
+  FR.set_brake_mode(MOTOR_BRAKE_COAST);
+  BL.set_brake_mode(MOTOR_BRAKE_COAST);
+  BR.set_brake_mode(MOTOR_BRAKE_COAST);
 }
 pros::Task DriveTask = pros::Task(DriveFunc, nullptr, "Computing Drive PID");
 pros::Task TurnTask = pros::Task(TurnFunc, nullptr, "Computing Turn PID");
 
-void PIDWait(pros::Task* Task, PID* Left, PID* Right)
+void TurnWait(int TimeOut)
 {
-  delay(20);
-  while(std::abs(Left->Error) > 15 && std::abs(Right->Error) > 15)
+
+  while(std::abs(LeftTurn.Error) > 5 && std::abs(RightTurn.Error) > 5)
   {
-    if(Left->Timeout < Time && Right->Timeout < Time)
+    if(TimeOut < Time && TimeOut < Time)
     {
-      Task->suspend();
+      TurnTask.suspend();
       Brake();
       SetDrivePower(0, 0);
+      break;
     }
     Time++;
+    delay(1);
   }
 
   for (size_t i = 0; i < 500; i++) {
     delay(1);
   }
-  Task->suspend();
+  TurnTask.suspend();
+  Brake();
+  SetDrivePower(0, 0);
+}
+
+void DriveWait(int TimeOut)
+{
+
+  pros::lcd::print(5, "Entered: %f", LeftDrive.Error);
+  while(std::abs(LeftDrive.Error) > 15 && std::abs(RightDrive.Error) > 15)
+  {
+    pros::lcd::print(6, "Time: &f", TimeOut);
+    if(TimeOut < Time && TimeOut < Time)
+    {
+      DriveTask.suspend();
+      Brake();
+      SetDrivePower(0, 0);
+      break;
+    }
+    Time++;
+    delay(1);
+  }
+  for (int i = 0; i < 500; i++) {
+    delay(1);
+  }
+  DriveTask.suspend();
   Brake();
   SetDrivePower(0, 0);
 }

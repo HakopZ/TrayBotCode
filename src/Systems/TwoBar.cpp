@@ -1,19 +1,19 @@
 #include "TwoBar.hpp"
-PID Lift(0.6, 0, 0, 200);
+long LTime = 0;
 void SetLift(int Power)
 {
   Lift.move(Power);
 }
-void SetHeight(int Value, int Timeout)
+void SetHeight(int Value)
 {
   LTime = 0;
-  Lift.SetTarget(Value, Timeout);
+  LiftPID.SetTarget(Value);
   LiftTask.resume();
 }
 void SlowLift(int Value, int Power)
 {
   LiftTask.suspend();
-  while(LiftPot.get_value() < Value)
+  while(Lift.get_position() < Value)
   {
     SetLift(Power);
   }
@@ -23,20 +23,19 @@ void LiftCompute(void*)
 {
   while(true)
   {
-    SetLift(Lift.Compute(LiftPot.get_value()));
+    SetLift(LiftPID.Compute(Lift.get_position()));
     delay(20);
   }
 }
 void LiftBrake()
 {
-  LeftLift.set_brake_mode(MOTOR_BRAKE_BRAKE);
-  RightLift.set_brake_mode(MOTOR_BRAKE_BRAKE);
+  Lift.set_brake_mode(MOTOR_BRAKE_BRAKE);
 }
-void LiftWait()
+void LiftWait(int TimeOut)
 {
-  while(std::abs(Lift.Error) > 15)
+  while(std::abs(LiftPID.Error) > 15)
   {
-    if(Lift.Timeout < LTime)
+    if(TimeOut < LTime)
     {
       LiftTask.suspend();
       LiftBrake();
