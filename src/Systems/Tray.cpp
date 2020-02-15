@@ -29,7 +29,14 @@ void TrayCompute(void*)
 {
   while(true)
   {
+    if(pros::millis() < 750)
+    {
+      SetTray(0);
+    }
+    else
+    {
     SetTray(TrayPID.Compute(TrayPot.get_value()));
+    }
     delay(20);
   }
 }

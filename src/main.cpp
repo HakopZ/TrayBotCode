@@ -4,6 +4,7 @@
 #include "Systems/TwoBar.hpp"
 #include "Systems/Tray.hpp"
 
+Controller x(E_CONTROLLER_MASTER);
 /**
  * A callback function for LLEMU's center button.
  *
@@ -36,93 +37,135 @@ void on_center_button() {
     LowD,
     Mid,
     MidD,
-    Intake,
-    AutoIntake,
+    Reset
   };
   void IntakeCoast() {
     LeftIntake.set_brake_mode(MOTOR_BRAKE_COAST);
     RightIntake.set_brake_mode(MOTOR_BRAKE_COAST);
   }
-  void ArmPreset(ArmStates x)
+  ArmStates StateCheck(ArmStates temp )
   {
-   switch(x)
-   {
-     case Down:
-
-       SetHeight(-5);
-       break;
-
-     case Intake:
-       SetHeight(LiftPos + 35);
-       break;
-     case AutoIntake:
-      SetHeight(LiftPos);
-      break;
-     case Low:
-       SetHeight(875);
-       break;
-     case LowD:
-       SetHeight(785);
-       break;
-     case Mid:
-       SetHeight(1125);
-       break;
-     case MidD:
-       SetHeight(1050);
-       break;
-
-   }
+    if(x.get_digital(DIGITAL_B))
+    {
+      return (x.get_digital(DIGITAL_L1) ? LowD : Low);
+    }
+    else if(x.get_digital(DIGITAL_DOWN))
+    {
+      return (x.get_digital(DIGITAL_L1) ? MidD : Mid);
+    }
+    else if(x.get_digital(DIGITAL_Y))
+    {
+      return (x.get_digital(DIGITAL_L1) ? Reset : Down);
+    }
+    else
+    {
+      return temp;
+    }
   }
+  ArmStates current = Down;
+  void ArmPreset(void*)
+  {
+    current = Down;
+    while(true)
+    {
+      switch(current){
+      case Down:
+      /*  LiftTask.suspend();
+        if(ArmButton.get_value() == 0)
+        {
+          SetLift(-100);
+        }
+        else if(ArmButton.get_value() == 1)
+        {
+          Lift.set_zero_position(0);
+        SetLift(-10);
+      }*/
+      SetHeight(0);
+       current = StateCheck(current);
+        break;
+      case Reset:
+       Lift.set_zero_position(0);
+       current = StateCheck(current);
+       break;
+      case Low:
+        SetHeight(675);
+        current = StateCheck(current);
+        break;
+      case LowD:
+        SetHeight(620);
+        current = StateCheck(current);
+        break;
+      case Mid:
+        SetHeight(925);
+        current = StateCheck(current);
+        break;
+      case MidD:
+        SetHeight(925);
+        current = StateCheck(current);
+        break;
+    }
+    delay(20);
+  }
+}
 
-void initialize() {
- TrayTask.suspend();
+void initialize(){
+  delay(500);
+  TrayTask.suspend();
 
- DriveTask.suspend();
- TurnTask.suspend();
- LiftTask.suspend();
+  DriveTask.suspend();
+  TurnTask.suspend();
+  LiftTask.suspend();
 
- BL.set_encoder_units(MOTOR_ENCODER_COUNTS);
- BR.set_encoder_units(MOTOR_ENCODER_COUNTS);
- Coast();
- Lift.set_encoder_units(MOTOR_ENCODER_DEGREES);
-
-
+  BL.set_encoder_units(MOTOR_ENCODER_COUNTS);
+  BR.set_encoder_units(MOTOR_ENCODER_COUNTS);
+  Coast();
+  Lift.set_encoder_units(MOTOR_ENCODER_DEGREES);
+  ResetDrive();
+  Lift.set_zero_position(0);
+  SwingTask.suspend();
  	pros::lcd::initialize();
 	pros::lcd::set_text(1, "Hello PROS User!");
 
 	pros::lcd::register_btn1_cb(on_center_button);
- delay(500);
+  delay(200);
 }
 
-/**
- * Runs while the robot is in the disabled state of Field Management System or
- * the VEX Competition Switch, following either autonomous or opcontrol. When
- * the robot is enabled, this task will exit.
- */
+void ArmPreset(ArmStates x) {
+  switch(x){
+    case Down:
+      LiftTask.suspend();
+      if(ArmButton.get_value() == 0)
+      {
+        SetLift(-100);
+      }
+      else if(ArmButton.get_value() == 1)
+      {
+        Lift.set_zero_position(0);
+      SetLift(-10);
+    }
+
+    break;
+  case Reset:
+   Lift.set_zero_position(0);
+   break;
+  case Low:
+    SetHeight(438);
+    break;
+  case LowD:
+    SetHeight(400);
+    break;
+  case Mid:
+    SetHeight(540);
+    break;
+  case MidD:
+    SetHeight(540);
+    break;
+}
+}
 void disabled() {}
 
-/**
- * Runs after initialize(), and before autonomous when connected to the Field
- * Management System or the VEX Competition Switch. This is intended for
- * competition-specific initialization routines, such as an autonomous selector
- * on the LCD.
- *
- * This task will exit when the robot is enabled and autonomous or opcontrol
- * starts.
- */
 void competition_initialize() {}
 
-/**
- * Runs the user autonomous code. This function will be started in its own task
- * with the default priority and stack size whenever the robot is enabled via
- * the Field Management System or the VEX Competition Switch in the autonomous
- * mode. Alternatively, this function may be called in initialize or opcontrol
- * for non-competition testing purposes.
- *
- * If the robot is disabled or communications is lost, the autonomous task
- * will be stopped. Re-enabling the robot will restart the task, not re-start it
- * from where it left off.
- */
 void SetIntake(int power)
 {
   LeftIntake.move(power);
@@ -130,188 +173,111 @@ void SetIntake(int power)
 }
 void Skills()
 {
-  SetTray(10);
-  ArmPreset(Low);
-  delay(700);
-  DriveTask.suspend();
-  ArmPreset(Intake);
-  delay(1100);
-  SetDrivePower(-80, -80);
+
+  SetIntake(80);
+  SetDrivePower(-50, -50);
+  delay(50);
+  ArmPreset(Mid);
   delay(350);
+  ArmPreset(Down);
+  delay(200);
+  SetIntake(-140);
+  delay(1);
   SetDrivePower(0, 0);
+  delay(200);
   ResetDrive();
-  SetIntake(-127);
-  SetDrive(115, 0, 40, -40, 12);
-  delay(20);
-  DriveWait(8500);
-  SetTurn(40, 50, -50);
-  delay(20);
-  TurnWait(600);
-  Tray.set_brake_mode(MOTOR_BRAKE_HOLD);
-  SetPosition(950);
-  SetDrive(15, 40, 60, -60, 12);
-  delay(20);
-  DriveWait(800);
-  SetIntake(50);
-  delay(150);
+  SetIntake(-140);
+  SetDrive(115, 40, -40, 0, 0);
+  DriveWait(11000);
+  SetTurn(45, 70, -70);
+  TurnWait(800);
+  SetIntake(65);
+  delay(250);
   SetIntake(0);
-  LeftIntake.set_brake_mode(MOTOR_BRAKE_HOLD);
-  RightIntake.set_brake_mode(MOTOR_BRAKE_HOLD);
-  delay(400);
-  TraySlow(1570, 90, 2000);
-  delay(750);
-  SetDrive(-17, 40, 60, -60, 0);
-  delay(750);
-  SetStraight(12);
-  SetPosition(500);
-  delay(20);
-  DriveWait(1250);
-  TrayTask.suspend();
+  Tray.set_brake_mode(MOTOR_BRAKE_HOLD);
+  SetPosition(1800);
+  SetDrive(18, 50, -50, 0);
+
+  DriveWait(900);
   LeftIntake.set_brake_mode(MOTOR_BRAKE_COAST);
   RightIntake.set_brake_mode(MOTOR_BRAKE_COAST);
-  SetTurn(100, 50, -50);
-  delay(20);
-  TurnWait(1500);
-  SetDrive(-17, 100, 127, -127, 12);
-  delay(20);
+  TraySlow(2250, 90, 1000);
+  delay(150);
+  SetDrive(-25, 50, -50, 0, 0);
+  SetPosition(1450);
+  DriveWait(1500);
+  SetTurn(200, 70, -70);
+  TurnWait(2500);
+  SetIntake(-140);
+  SetDrive(25, 70, -70, 0, 0);
   DriveWait(1000);
-  SetTurn(190, 60, -60);
-  delay(20);
-  TurnWait(1000);
-  SetDrivePower(-100, -100);
-  delay(1500);
-  SetDrivePower(0, 0);
-  delay(10);
-  ResetDrive();
-  delay(10);
-  SetDrive(15, 0, 100, -100, 12);
-  delay(20);
-  DriveWait(1200);
-
-  SetTurn(90, 60, -60);
-  delay(20);
-  TurnWait(1000);
-  SetIntake(-127);
-  SetDrive(14, 90, 90, -90, 12);
-  delay(20);
-  DriveWait(1000);
-  SetDrive(-7, 90, 100, -100, 12);
-  delay(20);
-  DriveWait(700);
-  SetIntake(80);
-  delay(400);
-  SetIntake(0);
-  ArmPreset(Mid);
-  delay(750);
-  SetDrive(10, 90, 100, -100, 12);
-  delay(750);
-  SetIntake(127);
-  delay(500);
-  SetDrive(-22, 90, 127, -127, 12);
-  delay(20);
-  ArmPreset(AutoIntake);
-  DriveWait(1000);
-  /*
-
-  DriveWait(1250);
-  SetDrive(-11, 200, 60, -60, 12);
-  SetIntake(70);
-  delay(400);
+  SetDrive(-5, 90, -90, 0, 0);
+  DriveWait(600);
+  SetIntake(65);
+  delay(250);
   SetIntake(0);
   ArmPreset(Low);
   delay(1000);
-  SetDrive(7, 200, 70, -70, 12);
-  delay(500);
-  SetIntake(100);
-  delay(350);
-  ArmPreset(AutoIntake);
-  SetTurn(145, 60, -60);
-  delay(20);
-  TurnWait(1500);
-  SetDrive(28, 145, 100, -100, 12);
-  SetIntake(-127);
-  delay(20);
-  DriveWait(1500);
-  SetDrive(-30, 145, 127, -127, 12);
-  delay(20);
-  DriveWait(1500);
-  SetTurn(130, 60, -60);
-  delay(20);
-  TurnWait(1000);
   SetIntake(80);
-  delay(400);
-  SetIntake(0);
-  ArmPreset(Low);
-  SetDrive(17, 130, 75, -75, 12);
-  delay(1500);
+
+}
+void RedEight()
+{
   SetIntake(80);
-  SetDrive(-10, 100, 75, -75, 12);
-  /*SetIntake(70);
-  delay(350);
-  SetIntake(0);
+  SetDrivePower(-50, -50);
+  delay(50);
   ArmPreset(Mid);
-  delay(900);
-  SetDrive(7, -90, 80, -80, 10);
-  delay(20);
-  DriveWait(500);
-  SetIntake(127);
-  delay(700);
-  SetIntake(-127);
-  SetTurn(-140, 60, -60);
-  delay(20);
-  TurnWait(1000);
-  SetDrive(-25, -140, 80, -80, 12);
-  delay(20);
-  DriveWait(1750);
+  delay(350);
   ArmPreset(Down);
+  delay(200);
+  SetIntake(-140);
+  delay(1);
+  SetDrivePower(0, 0);
+  delay(200);
+  ResetDrive();
+  SetIntake(-140);
+  SetDrive(35, 55, -55, 10, 0);
+  DriveWait(2200);
+  SetSwing(-80, -10, 1000, true, -13, 0, 0, 60);
+  SetDrivePower(-60, -60);
+  delay(500);
+  SetDrivePower(0, 0);
+  delay(100);
+  ResetDrive();
+  delay(1);
+  SetDrive(40, 40, -40, 0, 0);
+  DriveWait(2900);
+  SetDrive(-20, 100, -100, 0);
   delay(20);
-  SetTurn(-190, 50, -50);
-  delay(20);
-  TurnWait(1750);
-  DriveTask.suspend();
-  SetDrivePower(-70, -70);
-  delay(750);
-  SetDrive(115, -210, 45, -45, 11);
-  delay(20);
-  DriveWait(7000);
-  SetTurn(150, 60, -60);
+  DriveWait(1400);
+  LeftIntake.set_brake_mode(MOTOR_BRAKE_HOLD);
+  RightIntake.set_brake_mode(MOTOR_BRAKE_HOLD);
+  SetTurn(135, 80, -80);
   delay(20);
   TurnWait(1000);
-*/}
+
+  SetIntake(65);
+  delay(250);
+  SetIntake(0);
+  Tray.set_brake_mode(MOTOR_BRAKE_HOLD);
+  SetPosition(1800);
+  SetDrive(18, 50, -50, 0);
+  delay(20);
+  DriveWait(900);
+  LeftIntake.set_brake_mode(MOTOR_BRAKE_COAST);
+  RightIntake.set_brake_mode(MOTOR_BRAKE_COAST);
+  TraySlow(2250, 80, 1000);
+  delay(300);
+  SetDrivePower(-40, -40);
+  delay(250);
+   SetTray(-70);
+
+}
+
 void SevenPointRed()
 {
-  ArmPreset(Low);
-  delay(500);
-  DriveTask.suspend();
-  SetDrivePower(-60, -60);
-  ArmPreset(AutoIntake);
-  delay(1000);
-  SetDrive(47, 0, 40, -40, 10);
-  SetIntake(-127);
-  delay(20);
-  DriveWait(5000);
-  SetDrive(10, -35, 60, -60, 10);
-  delay(1500);
-  SetDrive(-35, 0, 127, -127, 10);
-  delay(20);
-  DriveWait(1500);
-  SetIntake(0);
-  SetTurn(130, 65, -65);
-  delay(20);
-  LeftIntake.set_brake_mode(MOTOR_BRAKE_HOLD);
-  RightIntake.set_brake_mode(MOTOR_BRAKE_HOLD);
-  TurnWait(1300);
-  SetDrive(15, 130, 70, -70, 10);
-  delay(20);
-  DriveWait(800);
-  SetIntake(0);
 
-  LeftIntake.set_brake_mode(MOTOR_BRAKE_COAST);
-  RightIntake.set_brake_mode(MOTOR_BRAKE_COAST);
-  SetPosition(1735);
-  delay(2250);
-  SetDrivePower(-40, -40);
-
+//  SetIntake(-80)
 }
 void SixBlueBack()
 {
@@ -319,7 +285,7 @@ void SixBlueBack()
   ArmPreset(Low);
   delay(700);
   DriveTask.suspend();
-  ArmPreset(Intake);
+  //ArmPreset(Intake);
   delay(1000);
   SetDrivePower(-80, -80);
   delay(350);
@@ -384,20 +350,20 @@ void SixRedBack()
   TurnWait(1000);
   SetDrive(15, -25, 127, -127, 12);
   delay(20);
-  DriveWait(1250);
+  DriveWait(1500);
   SetDrive(-15, -25, 127, -127, 12);
   delay(20);
   DriveWait(1000);
   SetTurn(0, 70, -70);
   delay(20);
   TurnWait(1000);
-  SetDrive(-18, 0, 127, -127, 12);
+  SetDrive(-15, 0, 127, -127, 12);
   delay(20);
   DriveWait(1000);
   SetIntake(0);
   LeftIntake.set_brake_mode(MOTOR_BRAKE_HOLD);
   RightIntake.set_brake_mode(MOTOR_BRAKE_HOLD);
-  SetTurn(135, 60, -60);
+  SetTurn(155, 60, -60);
   delay(20);
   TurnWait(1200);
   Tray.set_brake_mode(MOTOR_BRAKE_HOLD);
@@ -416,89 +382,215 @@ void SixRedBack()
   SetDrivePower(-40, -40);
 
 }
+void SixPointBlue()
+{
+  SetIntake(80);
+   SetDrive(10, 70, -70, 0, 0);
+   delay(500);
+   SetDrive(-10, 70, -70, 0, 0);
+   ArmPreset(Low);
+   delay(800);
+   ArmPreset(Down);
+   delay(650);
+   SetIntake(-127);
+   delay(1);
+   SetDrivePower(0, 0);
+   delay(300);
+   ResetDrive();
+   SetDrive(40, 47, -47, 0, 0);
+   delay(20);
+   DriveWait(3000);
+   SetTurn(30, 100, -100);
+   delay(20);
+   TurnWait(400);
+   SetDrive(11, 100, -100, 12);
+   delay(20);
+   DriveWait(600);
+   SetDrive(-10, 100, -100, 12);
+   delay(20);
+   DriveWait(400);
+   SetTurn(0, 70, -70);
+   delay(20);
+   TurnWait(400);
+  SetDrive(-20, 127, -127, 0);
+   delay(20);
+   DriveWait(1400);
+   SetIntake(0);
+   LeftIntake.set_brake_mode(MOTOR_BRAKE_HOLD);
+   RightIntake.set_brake_mode(MOTOR_BRAKE_HOLD);
+   SetTurn(-140, 60, -60);
+   delay(20);
+   TurnWait(1250);
+   SetIntake(60);
+   delay(250);
+   SetIntake(0);
+   delay(20);
+   Tray.set_brake_mode(MOTOR_BRAKE_HOLD);
+   SetPosition(1800);
+   SetDrive(18, 50, -50, 0);
+   delay(20);
+   DriveWait(900);
+   LeftIntake.set_brake_mode(MOTOR_BRAKE_COAST);
+   RightIntake.set_brake_mode(MOTOR_BRAKE_COAST);
+   TraySlow(2250, 127, 1000);
+   delay(100);
+   SetDrivePower(-40, -40);
+  delay(250);
+    SetTray(-70);
+}
 void FivePointBlue()
 {
-  ArmPreset(Low);
-  delay(750);
-  ArmPreset(Intake);
-  delay(500);
-  SetIntake(-127);
-  delay(50);
-  SetDrivePower(-80, -80);
-  delay(500);
-  SetDrivePower(0, 0);
-  ResetDrive();
+
+     SetIntake(80);
+     SetDrive(10, 70, -70, 0, 0);
+     delay(1000);
+     SetDrive(-10, 70, -70, 0, 0);
+     delay(500);
+     ArmPreset(Low);
+     delay(600);
+     ArmPreset(Down);
+     delay(800);
+     SetIntake(-140);
+     delay(1);
+     SetDrivePower(0, 0);
+     delay(300);
+     ResetDrive();
+     SetDrive(45, 40, -40, 0, 0);
+     delay(20);
+     DriveWait(3850);
+     SetDrive(-25, 127, -127, 0);
+     delay(20);
+     DriveWait(1750);
+     SetIntake(0);
+     LeftIntake.set_brake_mode(MOTOR_BRAKE_HOLD);
+     RightIntake.set_brake_mode(MOTOR_BRAKE_HOLD);
+     SetTurn(-140, 80, -80);
+     delay(20);
+     TurnWait(1200);
+     SetIntake(60);
+     delay(250);
+     SetIntake(0);
+     delay(20);
+     Tray.set_brake_mode(MOTOR_BRAKE_HOLD);
+     SetPosition(1800);
+     SetDrive(21, 55, -55, 0);
+     delay(20);
+     DriveWait(1000);
+     LeftIntake.set_brake_mode(MOTOR_BRAKE_COAST);
+     RightIntake.set_brake_mode(MOTOR_BRAKE_COAST);
+     TraySlow(2250, 127, 1000);
+     delay(100);
+     SetDrivePower(-40, -40);
+    delay(250);
+      SetTray(-70);
+
+}
+void FivePointBRed()
+{
+  SetIntake(80);
   delay(400);
-  SetDrive(49, 0, 43, -43, 12);
+  ArmPreset(Low);
+  delay(600);
+  ArmPreset(Down);
+  delay(1000);
+  SetIntake(-140);
+  delay(1);
+  SetDrivePower(0, 0);
+  delay(300);
+  ResetDrive();
+  SetDrive(40, 40, -40, 0, 0);
   delay(20);
   DriveWait(3500);
-  SetDrive(-22, 0, 90, -90, 12);
+  SetDrive(-20, 127, -127, 0);
   delay(20);
-  DriveWait(1500);
+  DriveWait(1400);
   SetIntake(0);
   LeftIntake.set_brake_mode(MOTOR_BRAKE_HOLD);
   RightIntake.set_brake_mode(MOTOR_BRAKE_HOLD);
-  SetTurn(-150, 60, -60);
+  SetTurn(150, 80, -80);
   delay(20);
-  TurnWait(1500);
+  TurnWait(1200);
+  SetIntake(60);
+  delay(250);
+  SetIntake(0);
+  delay(20);
   Tray.set_brake_mode(MOTOR_BRAKE_HOLD);
-  SetPosition(950);
-  SetDrive(18, -150, 50, -50, 10);
+  SetPosition(1800);
+  SetDrive(18, 50, -50, 0);
   delay(20);
   DriveWait(900);
-  SetIntake(50);
-  delay(150);
-  SetIntake(0);
-  delay(100);
   LeftIntake.set_brake_mode(MOTOR_BRAKE_COAST);
   RightIntake.set_brake_mode(MOTOR_BRAKE_COAST);
-  TraySlow(1576, 127, 1700);
-  delay(500);
+  TraySlow(2250, 127, 1000);
+  delay(100);
   SetDrivePower(-40, -40);
-
-}
-void FivePointRed()
-{
- ArmPreset(Low);
- delay(650);
- ArmPreset(Intake);
- delay(650);
- SetIntake(-127);
- delay(1);
- SetDrivePower(-80, -80);
- delay(500);
- SetDrivePower(0, 0);
- delay(500);
- ResetDrive();
- SetDrive(49, 0, 43, -43, 12);
- delay(20);
- DriveWait(3500);
- SetDrive(-22, 0, 127, -127, 12);
- delay(20);
- DriveWait(1000);
- SetIntake(0);
- LeftIntake.set_brake_mode(MOTOR_BRAKE_HOLD);
- RightIntake.set_brake_mode(MOTOR_BRAKE_HOLD);
- SetTurn(140, 60, -60);
- delay(20);
- TurnWait(1200);
- Tray.set_brake_mode(MOTOR_BRAKE_HOLD);
- SetPosition(950);
- SetDrive(18, 140, 50, -50, 12);
- delay(20);
- DriveWait(900);
- SetIntake(50);
- delay(150);
- SetIntake(0);
  delay(250);
- LeftIntake.set_brake_mode(MOTOR_BRAKE_COAST);
- RightIntake.set_brake_mode(MOTOR_BRAKE_COAST);
- TraySlow(1576, 99, 1700);
- delay(500);
- SetDrivePower(-40, -40);
+   SetTray(-70);
 
 }
+
 void SixPointRed()
+{
+
+   SetIntake(80);
+   SetDrivePower(-50, -50);
+   delay(50);
+   ArmPreset(Mid);
+   delay(600);
+   ArmPreset(Down);
+   delay(200);
+   SetIntake(-140);
+   delay(1);
+   SetDrivePower(0, 0);
+   delay(200);
+   ResetDrive();
+   SetDrive(40, 42, -42, 0, 0);
+   delay(20);
+   DriveWait(3500);
+   SetTurn(-30, 70, -70);
+   delay(20);
+   TurnWait(2000);
+   x.print(1, 2, "30 : %f", TurnTheta);
+
+   SetDrive(10, 50, -50, 0, 0);
+   delay(20);
+   DriveWait(700);
+   SetDrive(-10, 70, -70, 0, 0);
+   delay(20);
+   DriveWait(700);
+   SetTurn(0, 50, -50);
+   delay(20);
+   TurnWait(2000);
+
+   x.print(2, 2, "0 : %f", TurnTheta);
+   SetDrive(-20, 100, -100, 0);
+   delay(20);
+   DriveWait(1400);
+   SetIntake(0);
+   LeftIntake.set_brake_mode(MOTOR_BRAKE_HOLD);
+   RightIntake.set_brake_mode(MOTOR_BRAKE_HOLD);
+   SetTurn(140, 80, -80);
+   delay(20);
+   TurnWait(1000);
+   SetIntake(65);
+   delay(250);
+   SetIntake(0);
+   delay(20);
+   Tray.set_brake_mode(MOTOR_BRAKE_HOLD);
+   SetPosition(1800);
+   SetDrive(18, 50, -50, 0);
+   delay(20);
+   DriveWait(900);
+   LeftIntake.set_brake_mode(MOTOR_BRAKE_COAST);
+   RightIntake.set_brake_mode(MOTOR_BRAKE_COAST);
+   TraySlow(2250, 127, 1000);
+   delay(100);
+   SetDrivePower(-40, -40);
+  delay(250);
+    SetTray(-70);
+
+}
+void SixPointR()
 {
   ArmPreset(Low);
   delay(500);
@@ -528,7 +620,7 @@ void SixPointRed()
   delay(2250);
   SetDrivePower(-40, -40);
 }
-void SixPointBlue()
+void SixPointB()
 {
   SetIntake(-127);
   SetDrive(50, 0, 45, -45, 10);
@@ -694,16 +786,12 @@ void FiveCubeFront()
   SetDrive(20, -90, 60, -60, 10);
   delay(20);
   DriveWait(1500);
-
-  //SetDrive(17, -85,  60, -60, 10);
-  //delay(20);
-  //DriveWait(800);
 }
 void OneP()
 {
   ArmPreset(Low);
   delay(750);
-  ArmPreset(Intake);
+//  ArmPreset(Intake);
   delay(500);
   SetIntake(-127);
   delay(50);
@@ -714,19 +802,69 @@ void OneP()
   delay(400);
 
 }
+void RedF()
+{
+  SetIntake(80);
+  SetDrive(10, 70, -70, 0, 0);
+  delay(1000);
+  SetDrive(-10, 70, -70, 0, 0);
+  delay(500);
+  ArmPreset(Low);
+  delay(600);
+  ArmPreset(Down);
+  delay(500);
+  SetIntake(-140);
+  delay(1);
+  SetDrivePower(0, 0);
+  delay(300);
+  ResetDrive();
+  SetDrive(20, 40, -40, 0, 0);
+  delay(20);
+  DriveWait(3500);
+  SetTurn(90, 80, -80);
+  delay(20);
+  TurnWait(1200);
+  SetDrive(30, 50, -50, 0, 0);
+  delay(20);
+  DriveWait(2000);
+  SetTurn(130, 70, -70);
+  delay(20);
+  TurnWait(700);
+  SetIntake(60);
+  delay(250);
+  SetIntake(0);
+  delay(20);
+  LeftIntake.set_brake_mode(MOTOR_BRAKE_HOLD);
+  RightIntake.set_brake_mode(MOTOR_BRAKE_HOLD);
+  Tray.set_brake_mode(MOTOR_BRAKE_HOLD);
+  SetPosition(1800);
+  SetDrive(18, 50, -50, 0);
+  delay(20);
+  DriveWait(900);
+  LeftIntake.set_brake_mode(MOTOR_BRAKE_COAST);
+  RightIntake.set_brake_mode(MOTOR_BRAKE_COAST);
+  TraySlow(2250, 127, 1000);
+  delay(100);
+  SetDrivePower(-40, -40);
+ delay(250);
+   SetTray(-70);
+
+}
 void autonomous() {
   LiftTask.suspend();
   DriveTask.suspend();
   TrayTask.suspend();
   TurnTask.suspend();
-  delay(500);
+  delay(20);
  ResetDrive();
  Lift.set_zero_position(0);
  Lift.set_brake_mode(MOTOR_BRAKE_HOLD);
 
 
   ArmPreset(Down);
-  FivePointBlue();
+  RedEight();
+
+  //SetDrive(40, 0, 60, -60, 1);
 }
 
 /**
@@ -742,43 +880,36 @@ void autonomous() {
  * operator control task will be stopped. Re-enabling the robot will restart the
  * task, not resume it from where it left off.
  */
- Controller x(E_CONTROLLER_MASTER);
  void opcontrol() {
    LiftTask.suspend();
    DriveTask.suspend();
    TrayTask.suspend();
    TurnTask.suspend();
    delay(300);
-   ArmPreset(Intake);
 
+
+   Lift.set_zero_position(0);
+   Lift.set_brake_mode(MOTOR_BRAKE_HOLD);
 
    LeftIntake.set_brake_mode(MOTOR_BRAKE_COAST);
    RightIntake.set_brake_mode(MOTOR_BRAKE_COAST);
    ResetDrive();
-
+   pros::Task Armtask = pros::Task(ArmPreset, nullptr, "Arm Drive Task");
 	while (true) {
     SetDrivePower(x.get_analog(ANALOG_LEFT_Y), x.get_analog(ANALOG_RIGHT_Y));
-    if(x.get_digital(DIGITAL_B))
-    {
-      ArmPreset(x.get_digital(DIGITAL_L1) ? LowD : Low);
-    }
-    else if(x.get_digital(DIGITAL_DOWN))
-    {
-      ArmPreset(x.get_digital(DIGITAL_L1) ? MidD : Mid);
-    }
-    else if(x.get_digital(DIGITAL_Y))
-    {
-      ArmPreset(x.get_digital(DIGITAL_L1) ? Down : Intake);
-    }
     if(x.get_digital(DIGITAL_L2) && !x.get_digital(DIGITAL_L1))
     {
-      if(TrayPot.get_value() < 1100)
+      if(TrayPot.get_value() < 1670)
       {
         SetTray(127);
       }
-      else if(TrayPot.get_value() >= 1100 && TrayPot.get_value() < 1765)
+      else if(TrayPot.get_value() >= 1670 && TrayPot.get_value() < 1950)
       {
         SetTray(80);
+      }
+      else if(TrayPot.get_value() >= 1950 && TrayPot.get_value() < 2300)
+      {
+        SetTray(55);
       }
       else
       {
@@ -805,7 +936,7 @@ void autonomous() {
     }
     else
     {
-      if(TrayPot.get_value() < 1130 && Lift.get_position() < 75)
+      if(TrayPot.get_value() < 1600 && current == Down)
       {
       LeftIntake.move(-7);
       RightIntake.move(-7);

@@ -23,7 +23,14 @@ void LiftCompute(void*)
 {
   while(true)
   {
-    SetLift(LiftPID.Compute(Lift.get_position()));
+    if(pros::millis() < 750)
+    {
+      SetLift(0);
+    }
+    else
+    {
+      SetLift(LiftPID.Compute(Lift.get_position()));
+    }
     delay(20);
   }
 }
